@@ -1,4 +1,7 @@
-# quill
+# super quill
+
+Quill with superpowers — a fork of [quill](https://github.com/digimata/quill)
+(MIT) where the extra features land first.
 
 A minimal, fully local macOS meeting recorder + transcriber. One menu-bar
 click records your mic and all system audio as two separate tracks; when you
@@ -65,6 +68,16 @@ on next launch (the filesystem is the queue: a session with `meta.json` but no
 `transcript.json` is pending). Failures append to the session's
 `transcribe.log` and never block later jobs.
 
+Retries are capped at three attempts per session — counted on disk in
+`.transcribe-attempts`, so even an attempt that crashes the process counts.
+After the third failure the session gets a `.transcribe-failed` marker, a
+notification fires, the `on_stop` hook runs (with no transcript), and the
+session is never re-queued — a poison recording can't crash-loop the app at
+every launch. Delete `.transcribe-failed` to grant it three fresh attempts.
+Tracks longer than ~24 hours are skipped outright (with a `transcribe.log`
+line): they overflow the audio converter's frame counter, and a recording
+that long is a forgotten recorder, not a meeting — see `max_hours` below.
+
 The engine sits behind a small protocol; a Whisper engine (WhisperKit
 large-v3-turbo) is planned as the fallback / re-transcription option.
 
@@ -76,7 +89,8 @@ Optional, at `~/.config/quill/config.json`:
 {
   "recordings_dir": "~/Recordings",
   "transcription": { "enabled": true, "engine": "parakeet" },
-  "on_stop": "my-hook"
+  "on_stop": "my-hook",
+  "max_hours": 8
 }
 ```
 
@@ -91,8 +105,12 @@ Optional, at `~/.config/quill/config.json`:
   cancel, so raw capture is the better default.
 - `on_stop` — shell command spawned with the session directory as its
   argument, **after the transcript is written** (or right after recording if
-  transcription is disabled). Wire it to whatever comes next: summarization,
-  filing, indexing.
+  transcription is disabled, or after transcription is abandoned — check for
+  `transcript.json` if your hook needs one). Wire it to whatever comes next:
+  summarization, filing, indexing.
+- `max_hours` — auto-stop a recording after this many hours (fractions
+  allowed; unset = no cap). Insurance against the forgotten Friday recorder
+  that runs all weekend and produces a file too long to transcribe.
 
 ## CLI
 
