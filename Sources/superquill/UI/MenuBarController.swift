@@ -48,7 +48,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
-            title: "Quit quill",
+            title: "Quit superquill",
             action: #selector(quitClicked),
             keyEquivalent: "q"
         )
@@ -86,9 +86,10 @@ final class MenuBarController {
         transcriptionLabel.isHidden = text == nil
     }
 
-    // Inlined Lucide feather SVG. Keeping it in source means the executable
-    // has no separate resource bundle to install alongside it — true
-    // single-binary.
+    // Inlined Lucide feather SVG plus a sparkle badge — the badge is what
+    // tells superquill apart from plain quill at a glance in the menu bar.
+    // Keeping it in source means the executable has no separate resource
+    // bundle to install alongside it — true single-binary.
     private static let featherSVG = """
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" \
     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" \
@@ -96,6 +97,8 @@ final class MenuBarController {
     <path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/>\
     <path d="M16 8 2 22"/>\
     <path d="M17.5 15H9"/>\
+    <path d="M4.5 1 L5.3 3.2 7.5 4 5.3 4.8 4.5 7 3.7 4.8 1.5 4 3.7 3.2 Z" \
+    fill="currentColor" stroke="none"/>\
     </svg>
     """
 

@@ -5,7 +5,7 @@ import Foundation
 @main
 struct Quill: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "quill",
+        commandName: "superquill",
         abstract: "Local meeting recorder + transcriber. Records mic and system audio as two tracks, then transcribes on-device.",
         subcommands: [Run.self, Doctor.self, Install.self],
         defaultSubcommand: Run.self
@@ -54,7 +54,7 @@ struct Run: ParsableCommand {
         signal(SIGINT, SIG_IGN)
 
         FileHandle.standardError.write(Data(
-            "quill up · recordings → \(root.path) · ^C to quit\n".utf8
+            "superquill up · recordings → \(root.path) · ^C to quit\n".utf8
         ))
         app.run()
     }
@@ -136,7 +136,7 @@ final class AppController {
             FileHandle.standardError.write(Data("● recording → \(newSession.dir.path)\n".utf8))
         } catch {
             FileHandle.standardError.write(Data("recording start failed: \(error)\n".utf8))
-            notifyUser(title: "quill — recording failed", body: "\(error)")
+            notifyUser(title: "superquill — recording failed", body: "\(error)")
             return
         }
 
@@ -184,7 +184,7 @@ final class AppController {
                 "max_hours reached — auto-stopping \(session.dir.lastPathComponent)\n".utf8
             ))
             notifyUser(
-                title: "quill — recording auto-stopped",
+                title: "superquill — recording auto-stopped",
                 body: "hit max_hours after \(Self.format(elapsed)) — \(session.dir.lastPathComponent)"
             )
             stopSession()

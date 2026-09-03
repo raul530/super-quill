@@ -1,6 +1,6 @@
 import Foundation
 
-/// Optional user config at ~/.config/quill/config.json:
+/// Optional user config at ~/.config/superquill/config.json:
 ///
 ///     {
 ///       "recordings_dir": "~/Recordings",
@@ -17,7 +17,7 @@ import Foundation
 /// after recording when transcription is disabled.
 enum Config {
     static let path = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/quill/config.json")
+        .appendingPathComponent(".config/superquill/config.json")
 
     static let defaultRoot = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Recordings", isDirectory: true)

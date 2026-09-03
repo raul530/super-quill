@@ -93,13 +93,13 @@ actor TranscriptionCoordinator {
             }
             do {
                 try await transcribe(dir)
-                notifyUser(title: "quill — transcript ready", body: dir.lastPathComponent)
+                notifyUser(title: "superquill — transcript ready", body: dir.lastPathComponent)
                 runHook(for: dir)
             } catch {
                 log(dir, "transcription failed: \(error)")
                 lastFailure = dir.lastPathComponent
                 notifyUser(
-                    title: "quill — transcription failed",
+                    title: "superquill — transcription failed",
                     body: "\(dir.lastPathComponent) — see transcribe.log"
                 )
             }
@@ -193,7 +193,7 @@ actor TranscriptionCoordinator {
         try? FileManager.default.removeItem(at: dir.appendingPathComponent(Self.attemptsFile))
         lastFailure = dir.lastPathComponent
         notifyUser(
-            title: "quill — transcription abandoned",
+            title: "superquill — transcription abandoned",
             body: "\(dir.lastPathComponent) failed \(Self.maxAttempts)× — see transcribe.log"
         )
         runHook(for: dir)

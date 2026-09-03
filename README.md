@@ -5,7 +5,7 @@ Quill with superpowers — a fork of [quill](https://github.com/digimata/quill)
 
 A minimal, fully local macOS meeting recorder + transcriber. One menu-bar
 click records your mic and all system audio as two separate tracks; when you
-stop, quill transcribes both on-device and writes a speaker-tagged transcript.
+stop, superquill transcribes both on-device and writes a speaker-tagged transcript.
 Nothing ever leaves the machine.
 
 Named for the feather. Sibling of [parrot](https://github.com/digimata/parrot), same skeleton: single
@@ -14,11 +14,13 @@ Swift binary, menu-bar tray, no app bundle.
 ## Install
 
 ```sh
-cd quill
+cd super-quill
 swift build -c release
-sudo cp .build/release/quill /usr/local/bin/quill
-quill install --launch-at-login   # optional — runs in the background on login
+mkdir -p ~/.local/bin && cp .build/release/superquill ~/.local/bin/superquill
+superquill install --launch-at-login   # optional — runs in the background on login
 ```
+
+No sudo: the binary lives in `~/.local/bin` and the LaunchAgent points there.
 
 **Requires:** macOS 15+ (Core Audio process taps for system audio — no
 virtual device, no kernel extension). Apple Silicon recommended for
@@ -26,7 +28,7 @@ transcription speed.
 
 ## How to use
 
-1. **Run it** (`quill` in a terminal, or the LaunchAgent).
+1. **Run it** (`superquill` in a terminal, or the LaunchAgent).
 2. **Click the feather in the menu bar → Start recording.** First use prompts
    for microphone and System Audio Recording permissions. While recording, the
    icon turns red with a running elapsed counter, and macOS shows the purple
@@ -57,7 +59,7 @@ written is still readable.
 Built in, on-device, automatic. The default engine is **Parakeet TDT 0.6B v2**
 (English) via [FluidAudio](https://github.com/FluidInference/FluidAudio)'s
 Core ML port — roughly 20 seconds per hour of audio on Apple Silicon. Models
-(~600 MB) download once on first transcription; `quill doctor` tells you
+(~600 MB) download once on first transcription; `superquill doctor` tells you
 whether they're already cached so you're never downloading after an important
 meeting.
 
@@ -83,7 +85,7 @@ large-v3-turbo) is planned as the fallback / re-transcription option.
 
 ## Config
 
-Optional, at `~/.config/quill/config.json`:
+Optional, at `~/.config/superquill/config.json`:
 
 ```json
 {
@@ -115,11 +117,11 @@ Optional, at `~/.config/quill/config.json`:
 ## CLI
 
 ```sh
-quill                        # run the menu-bar daemon (^C to quit)
-quill run --out <dir>        # custom recordings root (default ~/Recordings)
-quill doctor                 # check permissions, recordings folder, models
-quill install --launch-at-login
-quill install --uninstall
+superquill                        # run the menu-bar daemon (^C to quit)
+superquill run --out <dir>        # custom recordings root (default ~/Recordings)
+superquill doctor                 # check permissions, recordings folder, models
+superquill install --launch-at-login
+superquill install --uninstall
 ```
 
 ## Stack
@@ -142,4 +144,4 @@ quill install --uninstall
 - Parakeet v2 is English-only. Other languages will come with the Whisper
   engine.
 - The binary embeds its Info.plist (`__TEXT,__info_plist`) so TCC can
-  attribute permissions to quill itself when running as a LaunchAgent.
+  attribute permissions to superquill itself when running as a LaunchAgent.
