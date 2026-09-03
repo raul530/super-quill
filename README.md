@@ -16,11 +16,15 @@ Swift binary, menu-bar tray, no app bundle.
 ```sh
 cd super-quill
 swift build -c release
-mkdir -p ~/.local/bin && cp .build/release/superquill ~/.local/bin/superquill
+mkdir -p ~/.local/bin && install .build/release/superquill ~/.local/bin/
 superquill install --launch-at-login   # optional — runs in the background on login
 ```
 
 No sudo: the binary lives in `~/.local/bin` and the LaunchAgent points there.
+`install` (not `cp`) on purpose — it replaces the file's inode, so updating a
+running daemon doesn't trip the kernel's cached code signature (`cp` over a
+live binary gets every relaunch killed with OS_REASON_CODESIGNING). After an
+update: `launchctl kickstart -k gui/$(id -u)/com.raul530.superquill`.
 
 **Requires:** macOS 15+ (Core Audio process taps for system audio — no
 virtual device, no kernel extension). Apple Silicon recommended for
