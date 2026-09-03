@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 
 /// Records the default input device to a file via AVAudioEngine, encoding AAC

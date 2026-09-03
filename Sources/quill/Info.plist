@@ -10,5 +10,7 @@
     <string>quill records your microphone during meetings so you can transcribe them later. Audio never leaves this Mac.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>quill records system audio (the other side of your meetings) so you can transcribe them later. Audio never leaves this Mac.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>quill's on_stop hook files action items from your transcripts into the Reminders app.</string>
 </dict>
 </plist>

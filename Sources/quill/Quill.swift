@@ -83,6 +83,10 @@ final class AppController {
     private let transcription = TranscriptionCoordinator()
     private var session: RecordingSession?
     private var ticker: Timer?
+    private var hotkey: GlobalHotkey?
+    /// Auto-stop deadline, captured from config when the session starts so a
+    /// mid-recording config edit has a well-defined (no) effect.
+    private var maxDuration: TimeInterval?
 
     init(root: URL) {
         self.root = root
@@ -90,6 +94,15 @@ final class AppController {
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
         menuBar.update(recording: false, elapsed: nil)
+
+        if let spec = Config.hotkey() {
+            hotkey = GlobalHotkey(spec: spec) { [weak self] in self?.toggle() }
+            if hotkey == nil {
+                FileHandle.standardError.write(Data(
+                    "hotkey \"\(spec)\" could not be registered — fix \"hotkey\" in the config or pick another combo\n".utf8
+                ))
+            }
+        }
 
         Task { [transcription, root] in
             await transcription.setStatusHandler { status in
@@ -127,6 +140,7 @@ final class AppController {
             return
         }
 
+        maxDuration = Config.maxRecordingHours().map { $0 * 3600 }
         menuBar.update(recording: true, elapsed: "0:00")
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -164,10 +178,19 @@ final class AppController {
 
     private func tick() {
         guard let session else { return }
-        menuBar.update(
-            recording: true,
-            elapsed: Self.format(Date().timeIntervalSince(session.startedAt))
-        )
+        let elapsed = Date().timeIntervalSince(session.startedAt)
+        if let maxDuration, elapsed >= maxDuration {
+            FileHandle.standardError.write(Data(
+                "max_hours reached — auto-stopping \(session.dir.lastPathComponent)\n".utf8
+            ))
+            notifyUser(
+                title: "quill — recording auto-stopped",
+                body: "hit max_hours after \(Self.format(elapsed)) — \(session.dir.lastPathComponent)"
+            )
+            stopSession()
+            return
+        }
+        menuBar.update(recording: true, elapsed: Self.format(elapsed))
     }
 
     private func openFolder() {

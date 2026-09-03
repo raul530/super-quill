@@ -6,7 +6,9 @@ import Foundation
 ///       "recordings_dir": "~/Recordings",
 ///       "transcription": { "enabled": true, "engine": "parakeet" },
 ///       "mic_voice_processing": true,
-///       "on_stop": "my-hook"
+///       "on_stop": "my-hook",
+///       "hotkey": "cmd+f8",
+///       "max_hours": 8
 ///     }
 ///
 /// Resolution order for the recordings root: --out flag > config file >
@@ -31,6 +33,21 @@ enum Config {
     static func onStop() -> String? {
         guard let cmd = load()?["on_stop"] as? String, !cmd.isEmpty else { return nil }
         return cmd
+    }
+
+    /// Auto-stop cap on a recording, in hours (fractions allowed), or nil for
+    /// no cap. A forgotten recorder otherwise runs for days and produces
+    /// audio no transcription engine survives.
+    static func maxRecordingHours() -> Double? {
+        guard let hours = load()?["max_hours"] as? Double, hours > 0 else { return nil }
+        return hours
+    }
+
+    /// Global shortcut that toggles recording, e.g. "cmd+f8" (the default),
+    /// "cmd+shift+r". Set to "" to disable the hotkey entirely.
+    static func hotkey() -> String? {
+        guard let value = load()?["hotkey"] as? String else { return "cmd+f8" }
+        return value.isEmpty ? nil : value
     }
 
     /// Whether finished recordings are transcribed automatically. Default on.

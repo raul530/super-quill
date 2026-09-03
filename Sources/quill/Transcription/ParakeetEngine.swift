@@ -10,6 +10,7 @@ actor ParakeetEngine: TranscriptionEngine {
     enum EngineError: Error, CustomStringConvertible {
         case notPrepared
         case unreadableAudio(URL, Error?)
+        case audioTooLong(URL, hours: Double)
 
         var description: String {
             switch self {
@@ -17,6 +18,11 @@ actor ParakeetEngine: TranscriptionEngine {
             case .unreadableAudio(let url, let e):
                 return "unreadable or empty audio \(url.lastPathComponent)"
                     + (e.map { ": \($0)" } ?? "")
+            case .audioTooLong(let url, let hours):
+                return String(
+                    format: "%@ is %.1f h of audio — past the converter's UInt32 frame limit, not transcribing",
+                    url.lastPathComponent, hours
+                )
             }
         }
     }
@@ -44,6 +50,17 @@ actor ParakeetEngine: TranscriptionEngine {
         do {
             let probe = try AVAudioFile(forReading: audio)
             guard probe.length > 0 else { throw EngineError.unreadableAudio(audio, nil) }
+            // FluidAudio's converter loop counts remaining frames in
+            // AVAudioFrameCount (UInt32) and traps — also uncatchably — on
+            // files with more frames than that (~24.8 h at 48 kHz). Refuse
+            // them while the error can still be thrown; a file that long is
+            // a forgotten recorder, not a meeting.
+            guard probe.length <= AVAudioFramePosition(AVAudioFrameCount.max) else {
+                throw EngineError.audioTooLong(
+                    audio,
+                    hours: Double(probe.length) / probe.processingFormat.sampleRate / 3600
+                )
+            }
         } catch let error as EngineError {
             throw error
         } catch {

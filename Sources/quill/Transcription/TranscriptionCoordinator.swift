@@ -7,12 +7,23 @@ import Foundation
 /// `resumePending()` rescans at launch, so a crash or quit mid-transcription
 /// just retries on next run. Failures append to the session's transcribe.log
 /// and never block later jobs.
+///
+/// Retries are capped: each attempt is counted on disk (.transcribe-attempts)
+/// *before* the engine touches the audio, so even an attempt that kills the
+/// whole process — Core ML and AVFoundation trap uncatchably on some inputs —
+/// still counts. After maxAttempts the session is marked .transcribe-failed
+/// and skipped forever, instead of crash-looping the app at every launch.
 actor TranscriptionCoordinator {
     enum Status: Sendable {
         case idle
         case transcribing(session: String, queued: Int)
         case failed(session: String)
     }
+
+    /// Transcription attempts a session gets before it's abandoned. Three
+    /// covers a transient crash (thermal, memory) without letting a poison
+    /// session hold the app hostage for more than a few launch cycles.
+    private static let maxAttempts = 3
 
     private var queue: [URL] = []
     private var draining = false
@@ -36,8 +47,8 @@ actor TranscriptionCoordinator {
     }
 
     /// Scan the recordings root for sessions that finished (meta.json exists)
-    /// but were never transcribed. Folder names sort chronologically, so
-    /// oldest-first is a name sort.
+    /// but were never transcribed — skipping ones already abandoned. Folder
+    /// names sort chronologically, so oldest-first is a name sort.
     func resumePending(root: URL) {
         guard Config.transcriptionEnabled() else { return }
         guard let entries = try? FileManager.default.contentsOfDirectory(
@@ -49,6 +60,7 @@ actor TranscriptionCoordinator {
             .filter {
                 fm.fileExists(atPath: $0.appendingPathComponent("meta.json").path)
                     && !fm.fileExists(atPath: $0.appendingPathComponent("transcript.json").path)
+                    && !fm.fileExists(atPath: $0.appendingPathComponent(Self.failedMarker).path)
             }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         for dir in pending where !queue.contains(dir) {
@@ -75,6 +87,10 @@ actor TranscriptionCoordinator {
         while !queue.isEmpty {
             let dir = queue.removeFirst()
             publish(.transcribing(session: dir.lastPathComponent, queued: queue.count))
+            guard attempts(dir) < Self.maxAttempts else {
+                giveUp(dir)
+                continue
+            }
             do {
                 try await transcribe(dir)
                 notifyUser(title: "quill — transcript ready", body: dir.lastPathComponent)
@@ -100,6 +116,12 @@ actor TranscriptionCoordinator {
     private func transcribe(_ dir: URL) async throws {
         let meta = try SessionMeta.read(from: dir)
         let engine = try await preparedEngine()
+
+        // Count the attempt on disk before the engine touches any audio, so
+        // an attempt that takes the whole process down is still counted at
+        // next launch. Deliberately after preparedEngine(): a failed model
+        // download (offline) must not burn a session's attempts.
+        recordAttempt(dir)
 
         var merged: [Transcript.Segment] = []
         for track in meta.tracks {
@@ -137,7 +159,44 @@ actor TranscriptionCoordinator {
             segments: merged
         )
         try transcript.write(to: dir)
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent(Self.attemptsFile))
         log(dir, "done — \(merged.count) segments")
+    }
+
+    // MARK: - Attempt cap
+
+    private static let attemptsFile = ".transcribe-attempts"
+    private static let failedMarker = ".transcribe-failed"
+
+    private func attempts(_ dir: URL) -> Int {
+        let url = dir.appendingPathComponent(Self.attemptsFile)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return 0 }
+        return Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    }
+
+    private func recordAttempt(_ dir: URL) {
+        let url = dir.appendingPathComponent(Self.attemptsFile)
+        try? Data("\(attempts(dir) + 1)\n".utf8).write(to: url)
+    }
+
+    /// Abandon a session that used up its attempts: mark it so it's never
+    /// re-enqueued (or re-notified), and fire the on_stop hook anyway —
+    /// downstream tooling should learn the session exists even without a
+    /// transcript. Deleting .transcribe-failed grants a fresh set of
+    /// attempts on the next launch.
+    private func giveUp(_ dir: URL) {
+        log(dir, "giving up after \(Self.maxAttempts) attempts — delete \(Self.failedMarker) to retry")
+        let marker = "abandoned after \(Self.maxAttempts) attempts "
+            + "at \(ISO8601DateFormatter().string(from: Date())) — "
+            + "see transcribe.log; delete this file to retry\n"
+        try? Data(marker.utf8).write(to: dir.appendingPathComponent(Self.failedMarker))
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent(Self.attemptsFile))
+        lastFailure = dir.lastPathComponent
+        notifyUser(
+            title: "quill — transcription abandoned",
+            body: "\(dir.lastPathComponent) failed \(Self.maxAttempts)× — see transcribe.log"
+        )
+        runHook(for: dir)
     }
 
     private func preparedEngine() async throws -> TranscriptionEngine {
@@ -156,7 +215,8 @@ actor TranscriptionCoordinator {
 
     /// Fires the configured on_stop shell command with the session directory
     /// as its sole argument, after the transcript exists (or immediately after
-    /// recording when transcription is disabled).
+    /// recording when transcription is disabled, or when the session is
+    /// abandoned — the hook can tell by the absence of transcript.json).
     private func runHook(for dir: URL) {
         guard let cmd = Config.onStop() else { return }
         let task = Process()
