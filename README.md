@@ -33,9 +33,11 @@ transcription speed.
    for microphone and System Audio Recording permissions. While recording, the
    icon turns red with a running elapsed counter, and macOS shows the purple
    recording indicator.
-3. **Click → Stop recording** when the meeting ends. Transcription starts
-   automatically (the menu shows progress); a notification fires when the
-   transcript is ready.
+3. **Click → Stop recording** when the meeting ends. A dialog pops up
+   asking what to name the recording — type a name and the session folder
+   becomes `<id> — <name>` right away (or hit Skip to keep the raw
+   timestamp). Transcription then starts automatically (the menu shows
+   progress); a notification fires when the transcript is ready.
 
 Each session lands in `~/Recordings/<yyyy.MM.dd-HHmm>/`:
 
@@ -113,6 +115,9 @@ Optional, at `~/.config/superquill/config.json`:
 - `max_hours` — auto-stop a recording after this many hours (fractions
   allowed; unset = no cap). Insurance against the forgotten Friday recorder
   that runs all weekend and produces a file too long to transcribe.
+- `ask_name` — pop the naming dialog when a recording stops (default
+  `true`). Set `false` for quill's silent behavior. Auto-stopped
+  (`max_hours`) and quit-time stops never prompt.
 
 ## CLI
 

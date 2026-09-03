@@ -35,6 +35,13 @@ enum Config {
         return cmd
     }
 
+    /// Whether stopping a recording pops a dialog asking what to name the
+    /// session (the folder becomes "<id> — <name>"). Default on — it's the
+    /// superquill signature move; set false for the silent quill behavior.
+    static func askName() -> Bool {
+        load()?["ask_name"] as? Bool ?? true
+    }
+
     /// Auto-stop cap on a recording, in hours (fractions allowed), or nil for
     /// no cap. A forgotten recorder otherwise runs for days and produces
     /// audio no transcription engine survives.

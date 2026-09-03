@@ -124,7 +124,7 @@ final class AppController {
         if session == nil {
             startSession()
         } else {
-            stopSession()
+            stopSession(askName: true)
         }
     }
 
@@ -147,7 +147,9 @@ final class AppController {
         }
     }
 
-    private func stopSession() {
+    /// `askName` pops the naming dialog — true only for a deliberate stop
+    /// (menu click, hotkey). Auto-stop and quit never block on a modal.
+    private func stopSession(askName: Bool = false) {
         guard let session else { return }
         session.stop()
         let elapsed = Self.format(Date().timeIntervalSince(session.startedAt))
@@ -159,8 +161,62 @@ final class AppController {
         ticker = nil
         menuBar.update(recording: false, elapsed: nil)
 
-        let dir = session.dir
+        // Name before enqueueing: the coordinator holds the folder URL for
+        // the whole transcription, so the rename must happen first.
+        var dir = session.dir
+        if askName, Config.askName() {
+            dir = Self.promptForName(of: dir, elapsed: elapsed)
+        }
         Task { [transcription] in await transcription.enqueue(dir) }
+    }
+
+    /// Ask what this recording was and rename its folder to "<id> — <name>"
+    /// — the same shape the on_stop pipeline gives auto-titled sessions, so
+    /// a name typed here wins (downstream tooling keeps parsing the id off
+    /// the prefix) and the raw-timestamp auto-title step skips it.
+    /// Returns the folder to use afterwards: renamed, or unchanged on skip.
+    private static func promptForName(of dir: URL, elapsed: String) -> URL {
+        let alert = NSAlert()
+        alert.messageText = "Name this recording"
+        alert.informativeText = "\(dir.lastPathComponent) · \(elapsed)"
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Skip")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.placeholderString = "Weekly sync with design"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return dir }
+
+        let name = sanitized(field.stringValue)
+        guard !name.isEmpty else { return dir }
+        let target = dir.deletingLastPathComponent()
+            .appendingPathComponent("\(dir.lastPathComponent) — \(name)", isDirectory: true)
+        do {
+            try FileManager.default.moveItem(at: dir, to: target)
+            FileHandle.standardError.write(Data(
+                "named → \(target.lastPathComponent)\n".utf8
+            ))
+            return target
+        } catch {
+            FileHandle.standardError.write(Data(
+                "couldn't rename session: \(error)\n".utf8
+            ))
+            return dir
+        }
+    }
+
+    /// Folder-safe name: no path or control characters, collapsed
+    /// whitespace, bounded length, and no trailing dot/space (invisible
+    /// landmines in folder names).
+    private static func sanitized(_ raw: String) -> String {
+        let cleaned = raw
+            .replacingOccurrences(of: "/", with: " ")
+            .replacingOccurrences(of: ":", with: " ")
+            .components(separatedBy: .controlCharacters).joined()
+            .split(separator: " ").joined(separator: " ")
+        return String(cleaned.prefix(60))
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
     }
 
     private func showTranscription(_ status: TranscriptionCoordinator.Status) {
