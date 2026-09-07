@@ -118,7 +118,10 @@ Optional, at `~/.config/superquill/config.json`:
   summarization, filing, indexing.
 - `max_hours` — auto-stop a recording after this many hours (fractions
   allowed; unset = no cap). Insurance against the forgotten Friday recorder
-  that runs all weekend and produces a file too long to transcribe.
+  that runs all weekend and produces a file too long to transcribe. Also
+  settable from the menu (**Auto-stop**: off / 1 / 2 / 4 / 8 hours — the
+  choice is written back here); picking a limit mid-recording applies to the
+  running session too.
 - `ask_name` — pop the naming dialog when a recording stops (default
   `true`). Set `false` for quill's silent behavior. Auto-stopped
   (`max_hours`) and quit-time stops never prompt.

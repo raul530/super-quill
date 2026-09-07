@@ -93,7 +93,9 @@ final class AppController {
         menuBar.onToggle = { [weak self] in self?.toggle() }
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
+        menuBar.onAutoStopChange = { [weak self] hours in self?.setAutoStop(hours) }
         menuBar.update(recording: false, elapsed: nil)
+        menuBar.updateAutoStop(Config.maxRecordingHours())
 
         if let spec = Config.hotkey() {
             hotkey = GlobalHotkey(spec: spec) { [weak self] in self?.toggle() }
@@ -141,6 +143,8 @@ final class AppController {
         }
 
         maxDuration = Config.maxRecordingHours().map { $0 * 3600 }
+        // Re-read here so a hand-edited config shows honestly in the menu.
+        menuBar.updateAutoStop(Config.maxRecordingHours())
         menuBar.update(recording: true, elapsed: "0:00")
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -230,6 +234,20 @@ final class AppController {
         case .failed(let name):
             menuBar.updateTranscription("transcription failed · \(name)")
         }
+    }
+
+    /// Menu choice for the auto-stop limit: persist it as max_hours and,
+    /// when a recording is live, retime it — picking a limit the session is
+    /// already past auto-stops on the next tick.
+    private func setAutoStop(_ hours: Double?) {
+        Config.setMaxRecordingHours(hours)
+        menuBar.updateAutoStop(hours)
+        if session != nil {
+            maxDuration = hours.map { $0 * 3600 }
+        }
+        FileHandle.standardError.write(Data(
+            "auto-stop \(hours.map { "set to \($0.formatted()) h" } ?? "off")\n".utf8
+        ))
     }
 
     private func tick() {

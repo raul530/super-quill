@@ -9,10 +9,18 @@ final class MenuBarController {
     private let stateLabel: NSMenuItem
     private let transcriptionLabel: NSMenuItem
     private let toggleItem: NSMenuItem
+    private let autoStopItem: NSMenuItem
+    private let autoStopMenu = NSMenu()
+    private var customAutoStopItem: NSMenuItem?
+
+    /// Auto-stop presets offered in the menu, in hours; nil = no limit. A
+    /// hand-edited config value outside this list gets its own checked row.
+    private static let autoStopChoices: [Double?] = [nil, 1, 2, 4, 8]
 
     var onToggle: (() -> Void)?
     var onOpenFolder: (() -> Void)?
     var onQuit: (() -> Void)?
+    var onAutoStopChange: ((Double?) -> Void)?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -38,6 +46,20 @@ final class MenuBarController {
         )
         menu.addItem(toggleItem)
 
+        autoStopItem = NSMenuItem(title: "Auto-stop: off", action: nil, keyEquivalent: "")
+        autoStopMenu.autoenablesItems = false
+        for hours in Self.autoStopChoices {
+            let item = NSMenuItem(
+                title: Self.autoStopTitle(hours),
+                action: #selector(autoStopClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.tag = Self.tag(for: hours)
+            autoStopMenu.addItem(item)
+        }
+        autoStopItem.submenu = autoStopMenu
+        menu.addItem(autoStopItem)
+
         let openFolder = NSMenuItem(
             title: "Open recordings folder",
             action: #selector(openFolderClicked),
@@ -54,7 +76,7 @@ final class MenuBarController {
         )
         menu.addItem(quit)
 
-        for item in [toggleItem, openFolder, quit] {
+        for item in [toggleItem, openFolder, quit] + autoStopMenu.items {
             item.target = self
         }
 
@@ -86,6 +108,49 @@ final class MenuBarController {
         transcriptionLabel.isHidden = text == nil
     }
 
+    /// Reflect the active auto-stop limit: checkmark the matching preset and
+    /// show the value on the submenu's parent item so it reads without
+    /// opening. A non-preset value (hand-edited config) gets a temporary row
+    /// of its own so the checkmark never lies.
+    func updateAutoStop(_ hours: Double?) {
+        autoStopItem.title = hours.map { "Auto-stop: \(Self.hoursLabel($0))" } ?? "Auto-stop: off"
+
+        if let custom = customAutoStopItem {
+            autoStopMenu.removeItem(custom)
+            customAutoStopItem = nil
+        }
+        let tag = Self.tag(for: hours)
+        var matched = false
+        for item in autoStopMenu.items {
+            item.state = item.tag == tag ? .on : .off
+            matched = matched || item.tag == tag
+        }
+        if !matched, let hours {
+            let custom = NSMenuItem(
+                title: Self.hoursLabel(hours),
+                action: #selector(autoStopClicked(_:)),
+                keyEquivalent: ""
+            )
+            custom.tag = tag
+            custom.state = .on
+            custom.target = self
+            autoStopMenu.addItem(custom)
+            customAutoStopItem = custom
+        }
+    }
+
+    private static func tag(for hours: Double?) -> Int {
+        Int(((hours ?? 0) * 60).rounded())
+    }
+
+    private static func autoStopTitle(_ hours: Double?) -> String {
+        hours.map(hoursLabel) ?? "Off"
+    }
+
+    private static func hoursLabel(_ hours: Double) -> String {
+        hours == 1 ? "1 hour" : "\(hours.formatted()) hours"
+    }
+
     // Inlined Lucide feather SVG plus a sparkle badge — the badge is what
     // tells superquill apart from plain quill at a glance in the menu bar.
     // Keeping it in source means the executable has no separate resource
@@ -114,4 +179,7 @@ final class MenuBarController {
     @objc private func toggleClicked() { onToggle?() }
     @objc private func openFolderClicked() { onOpenFolder?() }
     @objc private func quitClicked() { onQuit?() }
+    @objc private func autoStopClicked(_ sender: NSMenuItem) {
+        onAutoStopChange?(sender.tag == 0 ? nil : Double(sender.tag) / 60)
+    }
 }

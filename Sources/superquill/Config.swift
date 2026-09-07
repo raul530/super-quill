@@ -50,6 +50,43 @@ enum Config {
         return hours
     }
 
+    /// Persist the auto-stop cap chosen in the menu (nil clears it), keeping
+    /// every other key. The rewrite is a JSON round-trip, so hand formatting
+    /// is lost but content isn't; a malformed config is left untouched —
+    /// clobbering the user's file to store one number is worse than not
+    /// persisting.
+    static func setMaxRecordingHours(_ hours: Double?) {
+        var json: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: path.path) {
+            guard let existing = load() else {
+                FileHandle.standardError.write(Data(
+                    "warning: not saving max_hours — fix \(path.path) first\n".utf8
+                ))
+                return
+            }
+            json = existing
+        }
+        if let hours {
+            json["max_hours"] = hours
+        } else {
+            json.removeValue(forKey: "max_hours")
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: path.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try JSONSerialization.data(
+                withJSONObject: json,
+                options: [.prettyPrinted, .sortedKeys]
+            ).write(to: path, options: .atomic)
+        } catch {
+            FileHandle.standardError.write(Data(
+                "warning: couldn't save max_hours: \(error)\n".utf8
+            ))
+        }
+    }
+
     /// Global shortcut that toggles recording, e.g. "cmd+f8" (the default),
     /// "cmd+shift+r". Set to "" to disable the hotkey entirely.
     static func hotkey() -> String? {
