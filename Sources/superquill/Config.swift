@@ -4,7 +4,7 @@ import Foundation
 ///
 ///     {
 ///       "recordings_dir": "~/Recordings",
-///       "transcription": { "enabled": true, "engine": "parakeet" },
+///       "transcription": { "enabled": true, "engine": "parakeet", "language": "pt" },
 ///       "mic_voice_processing": true,
 ///       "on_stop": "my-hook",
 ///       "hotkey": "cmd+f8",
@@ -50,27 +50,63 @@ enum Config {
         return hours
     }
 
-    /// Persist the auto-stop cap chosen in the menu (nil clears it), keeping
-    /// every other key. The rewrite is a JSON round-trip, so hand formatting
-    /// is lost but content isn't; a malformed config is left untouched —
-    /// clobbering the user's file to store one number is worse than not
-    /// persisting.
+    /// Persist the auto-stop cap chosen in the menu; nil clears it.
     static func setMaxRecordingHours(_ hours: Double?) {
+        update("max_hours") { json in
+            if let hours {
+                json["max_hours"] = hours
+            } else {
+                json.removeValue(forKey: "max_hours")
+            }
+        }
+    }
+
+    /// Transcription language chosen in the menu ("pt", "es", …), or nil for
+    /// automatic detection. With parakeet v3 this is a decoding hint (the
+    /// model detects the language on its own; the hint pins the alphabet);
+    /// engines that support forced-language decoding honor it outright.
+    static func transcriptionLanguage() -> String? {
+        guard
+            let code = transcription()?["language"] as? String,
+            !code.isEmpty, code != "auto"
+        else { return nil }
+        return code
+    }
+
+    /// Persist the menu's language choice under transcription.language,
+    /// keeping the rest of the transcription block; nil restores auto.
+    static func setTranscriptionLanguage(_ code: String?) {
+        update("language") { json in
+            var block = json["transcription"] as? [String: Any] ?? [:]
+            if let code {
+                block["language"] = code
+            } else {
+                block.removeValue(forKey: "language")
+            }
+            if block.isEmpty {
+                json.removeValue(forKey: "transcription")
+            } else {
+                json["transcription"] = block
+            }
+        }
+    }
+
+    /// Rewrite the config file with `mutate` applied, keeping every other
+    /// key. The rewrite is a JSON round-trip, so hand formatting is lost but
+    /// content isn't; a malformed config is left untouched — clobbering the
+    /// user's file to store one setting is worse than not persisting.
+    private static func update(_ what: String, _ mutate: (inout [String: Any]) -> Void) {
         var json: [String: Any] = [:]
         if FileManager.default.fileExists(atPath: path.path) {
             guard let existing = load() else {
                 FileHandle.standardError.write(Data(
-                    "warning: not saving max_hours — fix \(path.path) first\n".utf8
+                    "warning: not saving \(what) — fix \(path.path) first\n".utf8
                 ))
                 return
             }
             json = existing
         }
-        if let hours {
-            json["max_hours"] = hours
-        } else {
-            json.removeValue(forKey: "max_hours")
-        }
+        mutate(&json)
         do {
             try FileManager.default.createDirectory(
                 at: path.deletingLastPathComponent(),
@@ -82,7 +118,7 @@ enum Config {
             ).write(to: path, options: .atomic)
         } catch {
             FileHandle.standardError.write(Data(
-                "warning: couldn't save max_hours: \(error)\n".utf8
+                "warning: couldn't save \(what): \(error)\n".utf8
             ))
         }
     }
@@ -99,8 +135,9 @@ enum Config {
         transcription()?["enabled"] as? Bool ?? true
     }
 
-    /// Configured engine name. Only "parakeet" ships today; the coordinator
-    /// warns and falls back for anything else.
+    /// Configured engine name. "parakeet" (multilingual v3, the default) and
+    /// "parakeet-v2" (the original English-only model) ship today; the
+    /// coordinator warns and falls back for anything else.
     static func transcriptionEngine() -> String {
         transcription()?["engine"] as? String ?? "parakeet"
     }

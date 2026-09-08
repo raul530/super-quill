@@ -12,15 +12,28 @@ final class MenuBarController {
     private let autoStopItem: NSMenuItem
     private let autoStopMenu = NSMenu()
     private var customAutoStopItem: NSMenuItem?
+    private let languageItem: NSMenuItem
+    private let languageMenu = NSMenu()
+    private var customLanguageItem: NSMenuItem?
 
     /// Auto-stop presets offered in the menu, in hours; nil = no limit. A
     /// hand-edited config value outside this list gets its own checked row.
     private static let autoStopChoices: [Double?] = [nil, 1, 2, 4, 8]
 
+    /// Transcription languages offered in the menu; nil = auto-detect. Any
+    /// other parakeet-v3 code set by hand in the config gets its own row.
+    private static let languageChoices: [(code: String?, label: String)] = [
+        (nil, "Auto"),
+        ("en", "English"),
+        ("pt", "Português"),
+        ("es", "Español"),
+    ]
+
     var onToggle: (() -> Void)?
     var onOpenFolder: (() -> Void)?
     var onQuit: (() -> Void)?
     var onAutoStopChange: ((Double?) -> Void)?
+    var onLanguageChange: ((String?) -> Void)?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -45,6 +58,20 @@ final class MenuBarController {
             keyEquivalent: "r"
         )
         menu.addItem(toggleItem)
+
+        languageItem = NSMenuItem(title: "Language: auto", action: nil, keyEquivalent: "")
+        languageMenu.autoenablesItems = false
+        for choice in Self.languageChoices {
+            let item = NSMenuItem(
+                title: choice.label,
+                action: #selector(languageClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = choice.code
+            languageMenu.addItem(item)
+        }
+        languageItem.submenu = languageMenu
+        menu.addItem(languageItem)
 
         autoStopItem = NSMenuItem(title: "Auto-stop: off", action: nil, keyEquivalent: "")
         autoStopMenu.autoenablesItems = false
@@ -76,7 +103,7 @@ final class MenuBarController {
         )
         menu.addItem(quit)
 
-        for item in [toggleItem, openFolder, quit] + autoStopMenu.items {
+        for item in [toggleItem, openFolder, quit] + autoStopMenu.items + languageMenu.items {
             item.target = self
         }
 
@@ -139,6 +166,38 @@ final class MenuBarController {
         }
     }
 
+    /// Reflect the transcription language: checkmark the matching row and
+    /// show the choice on the parent item. A hand-edited non-preset code
+    /// (e.g. "fr") gets a temporary checked row so the menu never lies.
+    func updateLanguage(_ code: String?) {
+        let label = Self.languageChoices.first { $0.code == code }?.label
+            ?? code?.uppercased()
+        languageItem.title = "Language: \(code == nil ? "auto" : (label ?? "auto"))"
+
+        if let custom = customLanguageItem {
+            languageMenu.removeItem(custom)
+            customLanguageItem = nil
+        }
+        var matched = false
+        for item in languageMenu.items {
+            let on = (item.representedObject as? String) == code
+            item.state = on ? .on : .off
+            matched = matched || on
+        }
+        if !matched, let code {
+            let custom = NSMenuItem(
+                title: code.uppercased(),
+                action: #selector(languageClicked(_:)),
+                keyEquivalent: ""
+            )
+            custom.representedObject = code
+            custom.state = .on
+            custom.target = self
+            languageMenu.addItem(custom)
+            customLanguageItem = custom
+        }
+    }
+
     private static func tag(for hours: Double?) -> Int {
         Int(((hours ?? 0) * 60).rounded())
     }
@@ -181,5 +240,8 @@ final class MenuBarController {
     @objc private func quitClicked() { onQuit?() }
     @objc private func autoStopClicked(_ sender: NSMenuItem) {
         onAutoStopChange?(sender.tag == 0 ? nil : Double(sender.tag) / 60)
+    }
+    @objc private func languageClicked(_ sender: NSMenuItem) {
+        onLanguageChange?(sender.representedObject as? String)
     }
 }

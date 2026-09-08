@@ -94,8 +94,10 @@ final class AppController {
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
         menuBar.onAutoStopChange = { [weak self] hours in self?.setAutoStop(hours) }
+        menuBar.onLanguageChange = { [weak self] code in self?.setLanguage(code) }
         menuBar.update(recording: false, elapsed: nil)
         menuBar.updateAutoStop(Config.maxRecordingHours())
+        menuBar.updateLanguage(Config.transcriptionLanguage())
 
         if let spec = Config.hotkey() {
             hotkey = GlobalHotkey(spec: spec) { [weak self] in self?.toggle() }
@@ -145,6 +147,7 @@ final class AppController {
         maxDuration = Config.maxRecordingHours().map { $0 * 3600 }
         // Re-read here so a hand-edited config shows honestly in the menu.
         menuBar.updateAutoStop(Config.maxRecordingHours())
+        menuBar.updateLanguage(Config.transcriptionLanguage())
         menuBar.update(recording: true, elapsed: "0:00")
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -247,6 +250,17 @@ final class AppController {
         }
         FileHandle.standardError.write(Data(
             "auto-stop \(hours.map { "set to \($0.formatted()) h" } ?? "off")\n".utf8
+        ))
+    }
+
+    /// Menu choice for the transcription language: persist it and reflect
+    /// it. The engine reads the config when each job runs, so the choice
+    /// covers everything not yet transcribed — no restart needed.
+    private func setLanguage(_ code: String?) {
+        Config.setTranscriptionLanguage(code)
+        menuBar.updateLanguage(code)
+        FileHandle.standardError.write(Data(
+            "transcription language \(code ?? "auto")\n".utf8
         ))
     }
 

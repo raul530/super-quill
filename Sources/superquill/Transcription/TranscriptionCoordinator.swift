@@ -201,13 +201,18 @@ actor TranscriptionCoordinator {
 
     private func preparedEngine() async throws -> TranscriptionEngine {
         if let engine { return engine }
-        let configured = Config.transcriptionEngine()
-        if configured != "parakeet" {
+        let engine: TranscriptionEngine
+        switch Config.transcriptionEngine() {
+        case "parakeet":
+            engine = ParakeetEngine()
+        case "parakeet-v2":
+            engine = ParakeetEngine(version: .v2)
+        case let configured:
             FileHandle.standardError.write(Data(
                 "warning: unknown transcription engine \"\(configured)\" — using parakeet\n".utf8
             ))
+            engine = ParakeetEngine()
         }
-        let engine = ParakeetEngine()
         try await engine.prepare()
         self.engine = engine
         return engine

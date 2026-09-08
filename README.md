@@ -62,12 +62,20 @@ written is still readable.
 
 ## Transcription
 
-Built in, on-device, automatic. The default engine is **Parakeet TDT 0.6B v2**
-(English) via [FluidAudio](https://github.com/FluidInference/FluidAudio)'s
-Core ML port — roughly 20 seconds per hour of audio on Apple Silicon. Models
-(~600 MB) download once on first transcription; `superquill doctor` tells you
-whether they're already cached so you're never downloading after an important
-meeting.
+Built in, on-device, automatic. The default engine is **Parakeet TDT 0.6B v3**
+(25 European languages — Portuguese, Spanish, English, French, German, … —
+auto-detected, with punctuation and capitalization) via
+[FluidAudio](https://github.com/FluidInference/FluidAudio)'s Core ML port —
+roughly 20 seconds per hour of audio on Apple Silicon. Models (~500 MB)
+download once on first transcription; `superquill doctor` tells you whether
+they're already cached so you're never downloading after an important meeting.
+
+The menu's **Language** submenu (Auto / English / Português / Español) stores
+`transcription.language` in the config. With parakeet v3 the choice is a
+decoding hint — the model still detects the spoken language on its own, and
+the hint pins the output alphabet; a future Whisper engine will honor it as a
+hard setting. `"engine": "parakeet-v2"` brings back the original English-only
+model.
 
 Each track is transcribed separately, shifted by its start offset so both
 share one clock, and merged by timestamp. Jobs run in a serial queue — you can
@@ -153,7 +161,7 @@ superquill install --uninstall
   per-process picker if it bothers you).
 - If recordings come out silent, check System Settings → Privacy & Security →
   Screen & System Audio Recording.
-- Parakeet v2 is English-only. Other languages will come with the Whisper
-  engine.
+- Parakeet v3 covers 25 European languages. For languages beyond those
+  (Japanese, Mandarin, Arabic, …), a Whisper engine is planned.
 - The binary embeds its Info.plist (`__TEXT,__info_plist`) so TCC can
   attribute permissions to superquill itself when running as a LaunchAgent.

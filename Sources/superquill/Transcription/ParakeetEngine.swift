@@ -2,10 +2,11 @@ import AVFoundation
 import FluidAudio
 import Foundation
 
-/// Parakeet TDT 0.6B v2 (English) via FluidAudio's Core ML port. Models
-/// download once into FluidAudio's managed cache (~600 MB); after that,
-/// transcription runs entirely on-device at roughly 20 seconds per hour of
-/// audio on Apple Silicon.
+/// Parakeet TDT 0.6B via FluidAudio's Core ML port — v3 (25 European
+/// languages, auto-detected, incl. Portuguese and Spanish) by default, or the
+/// original English-only v2. Models download once into FluidAudio's managed
+/// cache (~500 MB); after that, transcription runs entirely on-device at
+/// roughly 20 seconds per hour of audio on Apple Silicon.
 actor ParakeetEngine: TranscriptionEngine {
     enum EngineError: Error, CustomStringConvertible {
         case notPrepared
@@ -27,14 +28,27 @@ actor ParakeetEngine: TranscriptionEngine {
         }
     }
 
-    nonisolated let name = "parakeet"
-    nonisolated let model = "parakeet-tdt-0.6b-v2-coreml"
+    nonisolated let name: String
+    nonisolated let model: String
 
+    private let version: AsrModelVersion
     private var manager: AsrManager?
+
+    init(version: AsrModelVersion = .v3) {
+        self.version = version
+        switch version {
+        case .v2:
+            name = "parakeet-v2"
+            model = "parakeet-tdt-0.6b-v2-coreml"
+        default:
+            name = "parakeet"
+            model = "parakeet-tdt-0.6b-v3-coreml"
+        }
+    }
 
     func prepare() async throws {
         guard manager == nil else { return }
-        let models = try await AsrModels.downloadAndLoad(version: .v2)
+        let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager()
         try await manager.loadModels(models)
         self.manager = manager
@@ -67,8 +81,12 @@ actor ParakeetEngine: TranscriptionEngine {
             throw EngineError.unreadableAudio(audio, error)
         }
 
+        // The configured language rides along as a decoding hint (v3 only —
+        // it pins the output alphabet; the model still detects the language).
+        // Read per track, so a menu change applies to the next job.
+        let hint = Config.transcriptionLanguage().flatMap(Language.init(rawValue:))
         var state = try TdtDecoderState()
-        let result = try await manager.transcribe(audio, decoderState: &state)
+        let result = try await manager.transcribe(audio, decoderState: &state, language: hint)
 
         let words = buildWordTimings(from: result.tokenTimings ?? [])
         guard !words.isEmpty else {
